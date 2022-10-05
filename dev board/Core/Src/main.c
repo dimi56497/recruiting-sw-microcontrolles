@@ -48,6 +48,9 @@ TIM_HandleTypeDef htim3;
 /* USER CODE BEGIN PV */
 timer sensorT;
 timer sysT;
+
+enum state {INIT, RUNNING, DANGER, WAITING};
+enum state state = INIT;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -58,6 +61,7 @@ static void MX_LPUART1_UART_Init(void);
 static void MX_TIM3_Init(void);
 /* USER CODE BEGIN PFP */
 
+void startTimers(void);
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -104,19 +108,36 @@ int main(void)
   /* USER CODE BEGIN WHILE */
   while (1)
   {
+    switch (state)
+    {
+    case INIT:
+
+      state++;
+      break;
+    case RUNNING:
+      if(timeElapsed(&sensorT))
+      {
+        HAL_UART_Transmit(&hlpuart1, "Read sensor data!!\n\r", 21, 100);
+        initTimer(&sensorT, 200);
+      }
+
+      if(timeElapsed(&sysT))
+      {
+        HAL_UART_Transmit(&hlpuart1, "Read system voltage!!\n\r", 24, 100);
+        initTimer(&sysT, 350);
+      }
+      break;
+    
+    case WAITING:
+      HAL_UART_Transmit(&hlpuart1, "Board in waiting state - please press the emergency button\n\r", 61, 100);
+      HAL_Delay(500);
+      break;
+      
+    default:
+      break;
+    }
     /* USER CODE END WHILE */
 
-    if(timeElapsed(&sensorT))
-    {
-      HAL_UART_Transmit(&hlpuart1, "Read sensor data!!\n\r", 21, 100);
-      initTimer(&sensorT, 200);
-    }
-
-    if(timeElapsed(&sysT))
-    {
-      HAL_UART_Transmit(&hlpuart1, "Read system voltage!!\n\r", 24, 100);
-      initTimer(&sysT, 350);
-    }
     /* USER CODE BEGIN 3 */
   }
   /* USER CODE END 3 */
@@ -376,6 +397,24 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
   }
 }
 
+void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
+{
+  if(state != WAITING)
+  {
+    state = WAITING;
+  }
+  else
+  {
+    state = RUNNING;
+    startTimers();
+  }
+}
+
+void startTimers(void)
+{
+  initTimer(&sensorT, 200);
+  initTimer(&sysT, 350);
+}
 /* USER CODE END 4 */
 
 /**
