@@ -5,8 +5,7 @@
 #include <stdbool.h>
 
 typedef struct timer
-{
-    /* data */
+{ 
     uint16_t elapsedTime;
     uint16_t timerValue;
 } timer;

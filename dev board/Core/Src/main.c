@@ -46,7 +46,8 @@ UART_HandleTypeDef hlpuart1;
 TIM_HandleTypeDef htim3;
 
 /* USER CODE BEGIN PV */
-
+timer sensorT;
+timer sysT;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -96,7 +97,7 @@ int main(void)
   MX_LPUART1_UART_Init();
   MX_TIM3_Init();
   /* USER CODE BEGIN 2 */
-
+  HAL_TIM_Base_Start_IT(&htim3);
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -105,6 +106,17 @@ int main(void)
   {
     /* USER CODE END WHILE */
 
+    if(timeElapsed(&sensorT))
+    {
+      HAL_UART_Transmit(&hlpuart1, "Read sensor data!!\n\r", 21, 100);
+      initTimer(&sensorT, 200);
+    }
+
+    if(timeElapsed(&sysT))
+    {
+      HAL_UART_Transmit(&hlpuart1, "Read system voltage!!\n\r", 24, 100);
+      initTimer(&sysT, 350);
+    }
     /* USER CODE BEGIN 3 */
   }
   /* USER CODE END 3 */
@@ -354,6 +366,15 @@ static void MX_GPIO_Init(void)
 }
 
 /* USER CODE BEGIN 4 */
+
+void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
+{
+  if(htim == &htim3)
+  {
+    updateTime(&sensorT);
+    updateTime(&sysT);
+  }
+}
 
 /* USER CODE END 4 */
 
