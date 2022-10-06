@@ -21,7 +21,8 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-
+#include "stdio.h"
+#include "string.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -62,6 +63,8 @@ static void MX_TIM3_Init(void);
 /* USER CODE BEGIN PFP */
 
 void startTimers(void);
+void resetLeds(void);
+void uartPrint(char *string);
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -76,7 +79,7 @@ void startTimers(void);
 int main(void)
 {
   /* USER CODE BEGIN 1 */
-
+  char buffer[75];
   /* USER CODE END 1 */
 
   /* MCU Configuration--------------------------------------------------------*/
@@ -111,26 +114,59 @@ int main(void)
     switch (state)
     {
     case INIT:
-
+      initSysVlt(&hadc1);
+      startTimers();
       state++;
       break;
+
+    case DANGER:
+      if(sysVoltage.voltage > sysVoltage.upperThld)
+      {
+        HAL_GPIO_WritePin(OVLTLD_GPIO_Port,OVLTLD_Pin, GPIO_PIN_SET);
+        HAL_GPIO_WritePin(UNVLTLD_GPIO_Port, UNVLTLD_Pin, GPIO_PIN_RESET);
+      }
+      else
+      {
+        HAL_GPIO_WritePin(UNVLTLD_GPIO_Port, UNVLTLD_Pin, GPIO_PIN_SET);
+        HAL_GPIO_WritePin(OVLTLD_GPIO_Port,OVLTLD_Pin, GPIO_PIN_RESET);
+      }
     case RUNNING:
       if(timeElapsed(&sensorT))
       {
-        HAL_UART_Transmit(&hlpuart1, "Read sensor data!!\n\r", 21, 100);
+        uartPrint("Read sensor data\n\r");
         initTimer(&sensorT, 200);
       }
 
       if(timeElapsed(&sysT))
       {
-        HAL_UART_Transmit(&hlpuart1, "Read system voltage!!\n\r", 24, 100);
+        readSysVlt();
+        sprintf(buffer, "System voltage: %.2f\n\r", sysVoltage.voltage);
+        uartPrint(buffer);
+        if(sysVoltage.voltage > sysVoltage.lowerThld && sysVoltage.voltage < sysVoltage.upperThld)
+        {
+          if(state == DANGER)
+          {
+            resetLeds();
+            state = RUNNING;
+          }
+        }
+        else
+        {
+          state = DANGER;
+          uartPrint("Error voltage out of bound\n\r");
+          sprintf(buffer, "minimun voltage value is: %.2f,\n\r", sysVoltage.lowerThld);
+          uartPrint(buffer);
+          sprintf(buffer, "maximum voltage value is: %.2f\n\r", sysVoltage.upperThld);
+          uartPrint(buffer);
+        }
         initTimer(&sysT, 350);
       }
       break;
     
     case WAITING:
-      HAL_UART_Transmit(&hlpuart1, "Board in waiting state - please press the emergency button\n\r", 61, 100);
-      HAL_Delay(500);
+        resetLeds();
+        uartPrint("Board in waiting state - please press the emergency button\n\r");
+        HAL_Delay(500);
       break;
       
     default:
@@ -414,6 +450,17 @@ void startTimers(void)
 {
   initTimer(&sensorT, 200);
   initTimer(&sysT, 350);
+}
+
+void resetLeds(void)
+{
+  HAL_GPIO_WritePin(UNVLTLD_GPIO_Port, UNVLTLD_Pin, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(OVLTLD_GPIO_Port,OVLTLD_Pin, GPIO_PIN_RESET);
+}
+
+void uartPrint(char *string)
+{
+  HAL_UART_Transmit(&hlpuart1, string, strlen(string), 100);
 }
 /* USER CODE END 4 */
 

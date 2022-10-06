@@ -32,6 +32,7 @@ extern "C" {
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include "timer.h"
+#include "system_voltage.h"
 /* USER CODE END Includes */
 
 /* Exported types ------------------------------------------------------------*/
