@@ -22,7 +22,6 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include "stdio.h"
-#include "string.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -42,6 +41,8 @@
 /* Private variables ---------------------------------------------------------*/
 ADC_HandleTypeDef hadc1;
 
+I2C_HandleTypeDef hi2c1;
+
 UART_HandleTypeDef hlpuart1;
 
 TIM_HandleTypeDef htim3;
@@ -60,11 +61,13 @@ static void MX_GPIO_Init(void);
 static void MX_ADC1_Init(void);
 static void MX_LPUART1_UART_Init(void);
 static void MX_TIM3_Init(void);
+static void MX_I2C1_Init(void);
 /* USER CODE BEGIN PFP */
 
 void startTimers(void);
 void resetLeds(void);
 void uartPrint(char *string);
+void checkVltg(void);
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -79,7 +82,7 @@ void uartPrint(char *string);
 int main(void)
 {
   /* USER CODE BEGIN 1 */
-  char buffer[75];
+
   /* USER CODE END 1 */
 
   /* MCU Configuration--------------------------------------------------------*/
@@ -103,6 +106,7 @@ int main(void)
   MX_ADC1_Init();
   MX_LPUART1_UART_Init();
   MX_TIM3_Init();
+  MX_I2C1_Init();
   /* USER CODE BEGIN 2 */
   HAL_TIM_Base_Start_IT(&htim3);
   /* USER CODE END 2 */
@@ -114,7 +118,9 @@ int main(void)
     switch (state)
     {
     case INIT:
+      initUart(&hlpuart1);
       initSysVlt(&hadc1);
+      initSensor(&hi2c1);
       startTimers();
       state++;
       break;
@@ -133,33 +139,14 @@ int main(void)
     case RUNNING:
       if(timeElapsed(&sensorT))
       {
-        uartPrint("Read sensor data\n\r");
+        readTemp();
         initTimer(&sensorT, 200);
       }
 
       if(timeElapsed(&sysT))
       {
         readSysVlt();
-        sprintf(buffer, "System voltage: %.2f\n\r", sysVoltage.voltage);
-        uartPrint(buffer);
-        if(sysVoltage.voltage > sysVoltage.lowerThld && sysVoltage.voltage < sysVoltage.upperThld)
-        {
-          if(state == DANGER)
-          {
-            resetLeds();
-            state = RUNNING;
-          }
-        }
-        else
-        {
-          state = DANGER;
-          uartPrint("Error voltage out of bound\n\r");
-          sprintf(buffer, "minimun voltage value is: %.2f,\n\r", sysVoltage.lowerThld);
-          uartPrint(buffer);
-          sprintf(buffer, "maximum voltage value is: %.2f\n\r", sysVoltage.upperThld);
-          uartPrint(buffer);
-        }
-        initTimer(&sysT, 350);
+        checkVltg();
       }
       break;
     
@@ -290,6 +277,54 @@ static void MX_ADC1_Init(void)
   /* USER CODE BEGIN ADC1_Init 2 */
 
   /* USER CODE END ADC1_Init 2 */
+
+}
+
+/**
+  * @brief I2C1 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_I2C1_Init(void)
+{
+
+  /* USER CODE BEGIN I2C1_Init 0 */
+
+  /* USER CODE END I2C1_Init 0 */
+
+  /* USER CODE BEGIN I2C1_Init 1 */
+
+  /* USER CODE END I2C1_Init 1 */
+  hi2c1.Instance = I2C1;
+  hi2c1.Init.Timing = 0x30A0A7FB;
+  hi2c1.Init.OwnAddress1 = 0;
+  hi2c1.Init.AddressingMode = I2C_ADDRESSINGMODE_7BIT;
+  hi2c1.Init.DualAddressMode = I2C_DUALADDRESS_DISABLE;
+  hi2c1.Init.OwnAddress2 = 0;
+  hi2c1.Init.OwnAddress2Masks = I2C_OA2_NOMASK;
+  hi2c1.Init.GeneralCallMode = I2C_GENERALCALL_DISABLE;
+  hi2c1.Init.NoStretchMode = I2C_NOSTRETCH_DISABLE;
+  if (HAL_I2C_Init(&hi2c1) != HAL_OK)
+  {
+    Error_Handler();
+  }
+
+  /** Configure Analogue filter
+  */
+  if (HAL_I2CEx_ConfigAnalogFilter(&hi2c1, I2C_ANALOGFILTER_ENABLE) != HAL_OK)
+  {
+    Error_Handler();
+  }
+
+  /** Configure Digital filter
+  */
+  if (HAL_I2CEx_ConfigDigitalFilter(&hi2c1, 0) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN I2C1_Init 2 */
+
+  /* USER CODE END I2C1_Init 2 */
 
 }
 
@@ -458,9 +493,29 @@ void resetLeds(void)
   HAL_GPIO_WritePin(OVLTLD_GPIO_Port,OVLTLD_Pin, GPIO_PIN_RESET);
 }
 
-void uartPrint(char *string)
+void checkVltg(void)
 {
-  HAL_UART_Transmit(&hlpuart1, string, strlen(string), 100);
+  char buffer[40];
+  sprintf(buffer, "System voltage: %.2f\n\r", sysVoltage.voltage);
+  uartPrint(buffer);
+  if(sysVoltage.voltage > sysVoltage.lowerThld && sysVoltage.voltage < sysVoltage.upperThld)
+  {
+    if(state == DANGER)
+    {
+      resetLeds();
+      state = RUNNING;
+    }
+  }
+  else
+  {
+    state = DANGER;
+    uartPrint("Error voltage out of bound\n\r");
+    sprintf(buffer, "minimun voltage value is: %.2f,\n\r", sysVoltage.lowerThld);
+    uartPrint(buffer);
+    sprintf(buffer, "maximum voltage value is: %.2f\n\r", sysVoltage.upperThld);
+    uartPrint(buffer);
+  }
+  initTimer(&sysT, 350);
 }
 /* USER CODE END 4 */
 
