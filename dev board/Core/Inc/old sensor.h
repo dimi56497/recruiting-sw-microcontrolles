@@ -1,5 +1,5 @@
-#ifndef __SENSOR_H
-#define __SENSOR_H
+#ifndef __OLD_SENSOR_H
+#define __OLD_SENSOR_H
 
 #include "stm32g4xx_hal.h"
 #include "uart.h"

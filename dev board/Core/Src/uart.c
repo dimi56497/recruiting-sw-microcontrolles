@@ -9,5 +9,5 @@ void initUart(UART_HandleTypeDef *huart)
 
 void uartPrint(char *string)
 {
-    HAL_UART_Transmit(&uart, string, strlen(string), 100);
+    HAL_UART_Transmit(&uart, string, strlen(string), 10);
 }

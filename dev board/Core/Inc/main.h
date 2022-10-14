@@ -31,7 +31,6 @@ extern "C" {
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-#include "timer.h"
 #include "sensor.h"
 #include "system_voltage.h"
 #include "uart.h"

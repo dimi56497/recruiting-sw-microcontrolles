@@ -40,6 +40,7 @@
 
 /* Private variables ---------------------------------------------------------*/
 ADC_HandleTypeDef hadc1;
+ADC_HandleTypeDef hadc2;
 
 I2C_HandleTypeDef hi2c1;
 
@@ -48,10 +49,14 @@ UART_HandleTypeDef hlpuart1;
 TIM_HandleTypeDef htim3;
 
 /* USER CODE BEGIN PV */
-timer sensorT;
-timer sysT;
+uint16_t vTime;
+uint16_t sTime;
+uint16_t sensorReadTime = 200;
+uint16_t voltageReadTime = 350;
+uint8_t sensorTimerElapsed = 0;
+uint8_t voltageTimerElapsed = 0;
 
-enum state {INIT, RUNNING, DANGER, WAITING};
+enum state {INIT = 0U, RUNNING, DANGER, WAITING};
 enum state state = INIT;
 /* USER CODE END PV */
 
@@ -62,6 +67,7 @@ static void MX_ADC1_Init(void);
 static void MX_LPUART1_UART_Init(void);
 static void MX_TIM3_Init(void);
 static void MX_I2C1_Init(void);
+static void MX_ADC2_Init(void);
 /* USER CODE BEGIN PFP */
 
 void startTimers(void);
@@ -82,7 +88,7 @@ void checkVltg(void);
 int main(void)
 {
   /* USER CODE BEGIN 1 */
-
+  
   /* USER CODE END 1 */
 
   /* MCU Configuration--------------------------------------------------------*/
@@ -91,7 +97,7 @@ int main(void)
   HAL_Init();
 
   /* USER CODE BEGIN Init */
-
+  char buffer[40];
   /* USER CODE END Init */
 
   /* Configure the system clock */
@@ -107,22 +113,26 @@ int main(void)
   MX_LPUART1_UART_Init();
   MX_TIM3_Init();
   MX_I2C1_Init();
+  MX_ADC2_Init();
   /* USER CODE BEGIN 2 */
-  HAL_TIM_Base_Start_IT(&htim3);
+
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
+  HAL_UART_Transmit(&hlpuart1, "\r\n", sizeof("\r\n"), 100);
   while (1)
   {
     switch (state)
     {
     case INIT:
+      vTime = 0;
+      sTime = 0;
       initUart(&hlpuart1);
       initSysVlt(&hadc1);
-      initSensor(&hi2c1);
-      startTimers();
-      state++;
+      initSensor(&hadc2);
+      HAL_TIM_Base_Start_IT(&htim3);
+      state = RUNNING;
       break;
 
     case DANGER:
@@ -137,15 +147,21 @@ int main(void)
         HAL_GPIO_WritePin(OVLTLD_GPIO_Port,OVLTLD_Pin, GPIO_PIN_RESET);
       }
     case RUNNING:
-      if(timeElapsed(&sensorT))
+      if(sensorTimerElapsed == 1)
       {
-        readTemp();
-        initTimer(&sensorT, 200);
+        sensorTimerElapsed = 0;
+        readLight();
+        sprintf(buffer, "(%lu) Sensor light percentage: %d\n\r", HAL_GetTick() / 10, sensorLight);
+        //HAL_UART_Transmit(&hlpuart1, buffer, 27, 10);
+        uartPrint(buffer);
       }
 
-      if(timeElapsed(&sysT))
+      if(voltageTimerElapsed == 1)
       {
+        voltageTimerElapsed = 0;
         readSysVlt();
+        sprintf(buffer, "(%lu) Sys volt time:\n\r", HAL_GetTick() / 10);
+        uartPrint(buffer);
         checkVltg();
       }
       break;
@@ -281,6 +297,65 @@ static void MX_ADC1_Init(void)
 }
 
 /**
+  * @brief ADC2 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_ADC2_Init(void)
+{
+
+  /* USER CODE BEGIN ADC2_Init 0 */
+
+  /* USER CODE END ADC2_Init 0 */
+
+  ADC_ChannelConfTypeDef sConfig = {0};
+
+  /* USER CODE BEGIN ADC2_Init 1 */
+
+  /* USER CODE END ADC2_Init 1 */
+
+  /** Common config
+  */
+  hadc2.Instance = ADC2;
+  hadc2.Init.ClockPrescaler = ADC_CLOCK_SYNC_PCLK_DIV4;
+  hadc2.Init.Resolution = ADC_RESOLUTION_12B;
+  hadc2.Init.DataAlign = ADC_DATAALIGN_RIGHT;
+  hadc2.Init.GainCompensation = 0;
+  hadc2.Init.ScanConvMode = ADC_SCAN_DISABLE;
+  hadc2.Init.EOCSelection = ADC_EOC_SINGLE_CONV;
+  hadc2.Init.LowPowerAutoWait = DISABLE;
+  hadc2.Init.ContinuousConvMode = DISABLE;
+  hadc2.Init.NbrOfConversion = 1;
+  hadc2.Init.DiscontinuousConvMode = DISABLE;
+  hadc2.Init.ExternalTrigConv = ADC_SOFTWARE_START;
+  hadc2.Init.ExternalTrigConvEdge = ADC_EXTERNALTRIGCONVEDGE_NONE;
+  hadc2.Init.DMAContinuousRequests = DISABLE;
+  hadc2.Init.Overrun = ADC_OVR_DATA_PRESERVED;
+  hadc2.Init.OversamplingMode = DISABLE;
+  if (HAL_ADC_Init(&hadc2) != HAL_OK)
+  {
+    Error_Handler();
+  }
+
+  /** Configure Regular Channel
+  */
+  sConfig.Channel = ADC_CHANNEL_2;
+  sConfig.Rank = ADC_REGULAR_RANK_1;
+  sConfig.SamplingTime = ADC_SAMPLETIME_2CYCLES_5;
+  sConfig.SingleDiff = ADC_SINGLE_ENDED;
+  sConfig.OffsetNumber = ADC_OFFSET_NONE;
+  sConfig.Offset = 0;
+  if (HAL_ADC_ConfigChannel(&hadc2, &sConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN ADC2_Init 2 */
+
+  /* USER CODE END ADC2_Init 2 */
+
+}
+
+/**
   * @brief I2C1 Initialization Function
   * @param None
   * @retval None
@@ -396,7 +471,7 @@ static void MX_TIM3_Init(void)
   htim3.Instance = TIM3;
   htim3.Init.Prescaler = 170 - 1;
   htim3.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim3.Init.Period = 1000;
+  htim3.Init.Period = 999;
   htim3.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
   htim3.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
   if (HAL_TIM_Base_Init(&htim3) != HAL_OK)
@@ -463,8 +538,19 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 {
   if(htim == &htim3)
   {
-    updateTime(&sensorT);
-    updateTime(&sysT);
+    
+    if(sTime == sensorReadTime)
+    {
+      sensorTimerElapsed = 1;
+      sTime = 0;
+    }
+    if(vTime == voltageReadTime)
+    {
+      voltageTimerElapsed = 1;
+      vTime = 0;
+    }
+    sTime++;
+    vTime++;
   }
 }
 
@@ -473,18 +559,17 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
   if(state != WAITING)
   {
     state = WAITING;
+    HAL_TIM_Base_Stop_IT(&htim3);
+    vTime = 0xffff;
+    sTime = 0xffff;
   }
   else
   {
     state = RUNNING;
-    startTimers();
+    HAL_TIM_Base_Start_IT(&htim3);
+    vTime = 0;
+    sTime = 0;
   }
-}
-
-void startTimers(void)
-{
-  initTimer(&sensorT, 200);
-  initTimer(&sysT, 350);
 }
 
 void resetLeds(void)
@@ -495,8 +580,8 @@ void resetLeds(void)
 
 void checkVltg(void)
 {
-  char buffer[40];
-  sprintf(buffer, "System voltage: %.2f\n\r", sysVoltage.voltage);
+  char buffer[100];
+  sprintf(buffer, "(%lu) System voltage: %.2f\n\r", HAL_GetTick()/10,sysVoltage.voltage);
   uartPrint(buffer);
   if(sysVoltage.voltage > sysVoltage.lowerThld && sysVoltage.voltage < sysVoltage.upperThld)
   {
@@ -509,13 +594,10 @@ void checkVltg(void)
   else
   {
     state = DANGER;
-    uartPrint("Error voltage out of bound\n\r");
-    sprintf(buffer, "minimun voltage value is: %.2f,\n\r", sysVoltage.lowerThld);
-    uartPrint(buffer);
-    sprintf(buffer, "maximum voltage value is: %.2f\n\r", sysVoltage.upperThld);
+
+    sprintf(buffer, "Error voltage out of bound\n\rminimun voltage value is: %.2f,\n\rmaximum voltage value is: %.2f\n\r", sysVoltage.lowerThld,sysVoltage.upperThld);
     uartPrint(buffer);
   }
-  initTimer(&sysT, 350);
 }
 /* USER CODE END 4 */
 
